@@ -1,0 +1,52 @@
+stages:
+  - build
+  - test
+  - deploy
+default:
+  image: node
+
+.standard-rules:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+build-job:
+  extends: .standard-rules
+  stage: build
+  script:
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
+      - "build/"
+lint-markdown:
+  extends: .standard-rules  
+  stage: test
+  dependencies: [] # Don't fetch any artifacts
+  script:
+    - npm install markdownlint-cli2 --global
+    - markdownlint-cli2 -v
+    - markdownlint-cli2 "blog/**/*.md" "docs/**/*.md"
+  allow_failure: true
+  
+test-html:
+  stage: test
+  extends: .standard-rules
+  dependencies:
+    - build-job # Only fetch artifacts from `build-job`
+  script:
+    - npm install --save-dev htmlhint
+    - npx htmlhint --version
+    - npx htmlhint build/ # Lint all markdown files in blog/ and docs/
+  
+pages:
+  stage: deploy
+  image: busybox # Override the default `image` value with `busybox`
+  dependencies:
+    - build-job
+  script:
+    - mv build/ public/ 
+  artifacts:
+    paths:
+      - "public/"
+  rules:
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH # Run for all changes to the default branch only
